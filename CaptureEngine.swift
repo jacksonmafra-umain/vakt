@@ -26,8 +26,36 @@ final class CaptureEngine: NSObject {
     var onFailure: ((String) -> Void)?
 
     /// Pin a specific camera by `uniqueID` so an iPhone joining as Continuity
-    /// Camera cannot silently become the sensor of record.
-    var preferredDeviceUniqueID: String?
+    /// Camera — or a virtual camera feeding synthetic frames — cannot silently
+    /// become the sensor of record. Set from the enrolled template.
+    var pinnedDeviceUniqueID: String?
+
+    /// Allow a non-built-in camera. Off by default: a virtual camera is the
+    /// cheapest way to defeat every optical liveness signal at once, because
+    /// there is no physical scene left to measure.
+    var allowsExternalCameras = false
+
+    /// The camera actually in use, once configured.
+    private(set) var activeDeviceUniqueID: String?
+
+    enum CameraProblem: Error, Equatable {
+        case noneFound
+        case pinnedCameraMissing(String)
+        case notBuiltIn(String)
+
+        var message: String {
+            switch self {
+            case .noneFound:
+                return "No usable camera found."
+            case .pinnedCameraMissing:
+                return "The camera you enrolled with is not present. VAKT will not "
+                     + "watch through a different sensor — reconnect it, or re-enrol."
+            case .notBuiltIn(let name):
+                return "\"\(name)\" is not the built-in camera. A virtual or external "
+                     + "camera can feed VAKT any video at all, so it is refused."
+            }
+        }
+    }
 
     private let session = AVCaptureSession()
 
@@ -95,25 +123,45 @@ final class CaptureEngine: NSObject {
         }
     }
 
-    private func configure() -> Bool {
-        guard !configured else { return true }
-
+    /// Nil on success, otherwise why no camera was acceptable.
+    func selectDevice() -> Result<AVCaptureDevice, CameraProblem> {
         let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .external],
+            deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
             mediaType: .video,
             position: .unspecified)
 
-        let device: AVCaptureDevice? = {
-            if let id = preferredDeviceUniqueID {
-                return discovery.devices.first { $0.uniqueID == id }
+        if let id = pinnedDeviceUniqueID {
+            guard let device = discovery.devices.first(where: { $0.uniqueID == id }) else {
+                return .failure(.pinnedCameraMissing(id))
             }
-            return discovery.devices.first
-        }()
+            return .success(device)
+        }
 
-        guard let device, let input = try? AVCaptureDeviceInput(device: device) else {
-            onFailure?("No usable camera found.")
+        let builtIn = discovery.devices.first { $0.deviceType == .builtInWideAngleCamera }
+        if let builtIn { return .success(builtIn) }
+
+        guard let fallback = discovery.devices.first else { return .failure(.noneFound) }
+        guard allowsExternalCameras else { return .failure(.notBuiltIn(fallback.localizedName)) }
+        return .success(fallback)
+    }
+
+    private func configure() -> Bool {
+        guard !configured else { return true }
+
+        let device: AVCaptureDevice
+        switch selectDevice() {
+        case .success(let d):
+            device = d
+        case .failure(let problem):
+            onFailure?(problem.message)
             return false
         }
+
+        guard let input = try? AVCaptureDeviceInput(device: device) else {
+            onFailure?(CameraProblem.noneFound.message)
+            return false
+        }
+        activeDeviceUniqueID = device.uniqueID
 
         session.beginConfiguration()
         // 720p, falling back to medium. 640x480 finds landmarks fine but Vision
