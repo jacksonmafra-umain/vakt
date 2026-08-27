@@ -102,6 +102,8 @@ struct MenuContent: View {
             reading("Liveness", String(format: "%.2f", sentry.lastLiveness.score))
             reading("Match", String(format: "%.2f", sentry.lastSimilarity))
             reading("Blink seen", sentry.lastLiveness.blinkObserved ? "yes" : "no")
+            reading("Depth", String(format: "%.3f", sentry.lastLiveness.parallaxPerRadian))
+            reading("Scene coupling", String(format: "%.2f", sentry.lastScene.coupling))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

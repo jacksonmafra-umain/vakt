@@ -12,6 +12,7 @@ final class SentryController: ObservableObject {
     @Published private(set) var state: SentryState = .disarmed
     @Published private(set) var lastLiveness = LivenessReport()
     @Published private(set) var lastSimilarity: Float = 0
+    @Published private(set) var lastScene = SceneMotionEngine.Report()
     @Published private(set) var isEnrolled = false
     @Published var policy: Policy = PolicyStore.load()
 
@@ -38,6 +39,7 @@ final class SentryController: ObservableObject {
     private let capture = CaptureEngine()
     private let analyzer = FaceAnalyzer()
     private let liveness = LivenessEngine()
+    private let sceneMotion = SceneMotionEngine()
     private let identity: IdentityEngine
     private let power = PowerAssertion()
 
@@ -120,6 +122,7 @@ final class SentryController: ObservableObject {
 
     private func arm() {
         liveness.reset()
+        sceneMotion.reset()
         lastFaceSeen = nil
         strangerSince = nil; spoofSince = nil; darkSince = nil
         state = .searching(since: Date())
@@ -139,6 +142,7 @@ final class SentryController: ObservableObject {
         capture.stop()
         power.release()
         liveness.reset()
+        sceneMotion.reset()
         state = isEnrolled ? .disarmed : .notEnrolled
         EventLog.shared.record("disarmed", "VAKT stopped watching.")
     }
@@ -190,6 +194,8 @@ final class SentryController: ObservableObject {
         let primary = samples.max { $0.interocular < $1.interocular }!
         let report = liveness.ingest(primary)
         lastLiveness = report
+        let scene = sceneMotion.ingest(pixelBuffer: frame.pixelBuffer, sample: primary)
+        lastScene = scene
 
         let decision = identity.match(pixelBuffer: frame.pixelBuffer, sample: primary)
         if decision.similarity > 0 { lastSimilarity = decision.similarity }
@@ -210,6 +216,30 @@ final class SentryController: ObservableObject {
 
         case .owner:
             strangerSince = nil
+
+            // A video of you deforms and blinks like you do, so the liveness
+            // score alone will call it live. What it cannot fake is depth: on a
+            // panel every landmark moves under one homography.
+            if scene.heldObjectSuspected {
+                let since = spoofSince ?? Date()
+                spoofSince = since
+                state = .verifying
+                if Date().timeIntervalSince(since) >= policy.spoofGrace {
+                    lock(.heldDevice, liveness: report.score, similarity: decision.similarity)
+                }
+                return
+            }
+
+            if report.planarReplaySuspected {
+                let since = spoofSince ?? Date()
+                spoofSince = since
+                state = .verifying
+                if Date().timeIntervalSince(since) >= policy.spoofGrace {
+                    lock(.screenReplay, liveness: report.score, similarity: decision.similarity)
+                }
+                return
+            }
+
             // The interesting case. The face matches. Is it made of skin?
             switch report.verdict {
             case .live:
@@ -239,6 +269,7 @@ final class SentryController: ObservableObject {
 
     private func handleNoFace() {
         liveness.decay()
+        sceneMotion.reset()
         strangerSince = nil; spoofSince = nil
         capture.setCadence(.burst(onSeconds: policy.idleBurstOn,
                                   everySeconds: policy.idleBurstEvery))
@@ -266,6 +297,7 @@ final class SentryController: ObservableObject {
         Locker.lockNow()
         state = .locked(reason: reason)
         self.liveness.reset()
+        sceneMotion.reset()
         lastFaceSeen = nil
         strangerSince = nil; spoofSince = nil; darkSince = nil
         capture.setCadence(.burst(onSeconds: policy.idleBurstOn,
