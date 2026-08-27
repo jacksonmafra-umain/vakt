@@ -86,7 +86,11 @@ if pgrep -qf "$APP_NAME/Contents/MacOS/VAKT"; then
         warn "a LaunchAgent is loaded and would relaunch it mid-copy; unloading."
         run launchctl bootout "gui/$(id -u)/$BUNDLE_ID"
     fi
-    run pkill -f "$APP_NAME/Contents/MacOS/VAKT"
+    # `pkill` exits 1 when it matches nothing, and by this point it often does:
+    # `launchctl bootout` above already stopped the app. Under `set -e` that
+    # aborted the install after the agent had been unloaded — leaving no VAKT
+    # running at all.
+    run pkill -f "$APP_NAME/Contents/MacOS/VAKT" || true
     sleep 1
 fi
 
