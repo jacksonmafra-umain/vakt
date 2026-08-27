@@ -144,7 +144,11 @@ fi
 # 6. Launch — unless something already did. `launchctl bootstrap` starts the app
 #    itself, so opening it again here produced a second instance: two eye icons in
 #    the menu bar, two watchers, the camera in use twice.
-if [ "$OPEN_AFTER" = yes ]; then
+if [ "$INSTALL_AGENT" = yes ] && [ "$DRY_RUN" = no ]; then
+    # launchd is already spawning it. Racing that with `open` is how two copies
+    # start at once and one immediately exits as a duplicate.
+    say "Started by the LaunchAgent"
+elif [ "$OPEN_AFTER" = yes ]; then
     if [ "$DRY_RUN" = no ] && pgrep -qf "$APP_NAME/Contents/MacOS/VAKT"; then
         say "VAKT is already running (started by the LaunchAgent); not opening a second copy"
     else
