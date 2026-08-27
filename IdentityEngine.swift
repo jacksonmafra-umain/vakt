@@ -152,7 +152,7 @@ final class IdentityEngine {
     var rejectThreshold: Float
     /// Skip frames Vision rates as low quality — a blurry crop produces a
     /// low similarity score for the owner too, and that is a false lock.
-    var minCaptureQuality: Float = 0.35
+    var minCaptureQuality: Float = FaceQuality.minimum
 
     init(embedder: FaceEmbedder,
          template: OwnerTemplate?,

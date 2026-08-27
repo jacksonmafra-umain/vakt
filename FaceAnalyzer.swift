@@ -104,6 +104,16 @@ final class FaceAnalyzer {
     }
 }
 
+/// One bar for "is this frame worth trusting", shared by enrolment and matching.
+/// Enrolling from frames worse than the ones matching will accept builds a
+/// template the watcher can never match; enrolling from a stricter bar than
+/// matching makes enrolment impossible in ordinary indoor light. Vision rates a
+/// correctly exposed webcam face at roughly 0.35, a backlit or blurred one below
+/// 0.25.
+enum FaceQuality {
+    static let minimum: Float = 0.30
+}
+
 enum Geometry {
     static func centroid(_ p: [CGPoint]) -> CGPoint {
         guard !p.isEmpty else { return .zero }
