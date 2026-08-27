@@ -48,6 +48,7 @@ final class SentryController: ObservableObject {
     private var spoofSince: Date?
     private var darkSince: Date?
     private var unlockedByOwnerAt: Date?
+    private var planarObservedAt: Date?
     private var enrolling: EnrollmentSession?
     private var wasArmedBeforeEnrollment = false
     private var observers: [NSObjectProtocol] = []
@@ -252,13 +253,26 @@ final class SentryController: ObservableObject {
             }
 
             if report.planarReplaySuspected {
-                let since = spoofSince ?? Date()
-                spoofSince = since
-                state = .verifying
-                if Date().timeIntervalSince(since) >= policy.spoofGrace {
-                    lock(.screenReplay, liveness: report.score, similarity: decision.similarity)
+                if policy.lockOnPlanarReplay {
+                    let since = spoofSince ?? Date()
+                    spoofSince = since
+                    state = .verifying
+                    if Date().timeIntervalSince(since) >= policy.spoofGrace {
+                        lock(.screenReplay, liveness: report.score, similarity: decision.similarity)
+                    }
+                    return
                 }
-                return
+                // Advisory: record what it would have done, with the numbers that
+                // made it think so. This is the data the threshold needs.
+                if planarObservedAt == nil || Date().timeIntervalSince(planarObservedAt!) > 60 {
+                    planarObservedAt = Date()
+                    EventLog.shared.record(
+                        "planarReplay.observed",
+                        String(format: "depth %.4f over %d samples — would have locked",
+                               report.parallaxPerRadian, report.parallaxSamples),
+                        liveness: report.score,
+                        similarity: decision.similarity)
+                }
             }
 
             // The interesting case. The face matches. Is it made of skin?
