@@ -1,0 +1,70 @@
+name: VAKT
+
+options:
+  bundleIdPrefix: com.jacksonmafra
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    # The sources predate Swift 6 strict concurrency: frames cross the capture
+    # queue as CVPixelBuffer and hop to @MainActor by hand. Swift 5 language
+    # mode keeps that a warning instead of an error.
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  VAKT:
+    type: application
+    platform: macOS
+
+    sources:
+      - path: .
+        includes:
+          - "*.swift"
+        createIntermediateGroups: true
+
+    settings:
+      base:
+        PRODUCT_NAME: VAKT
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacksonmafra.vakt
+
+        # Use the checked-in plist and entitlements, not generated ones.
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: VAKT.entitlements
+
+        # Hardened Runtime on, App Sandbox off. The sandbox blocks both lock
+        # paths (dlopen of login.framework and the CGSession fallback), which
+        # would leave VAKT able to detect an intruder and unable to act.
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+
+        # Empty team = "Sign to Run Locally" (ad-hoc). Set DEVELOPMENT_TEAM in
+        # Local.xcconfig with your Developer ID to keep a stable code identity,
+        # otherwise the Keychain and camera permission prompts come back on
+        # every rebuild.
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+
+        COMBINE_HIDPI_IMAGES: YES
+        DEAD_CODE_STRIPPING: YES
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+    configFiles:
+      Debug: Local.xcconfig
+      Release: Local.xcconfig
+
+schemes:
+  VAKT:
+    build:
+      targets:
+        VAKT: all
+    run:
+      config: Debug
+    archive:
+      config: Release

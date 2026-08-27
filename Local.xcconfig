@@ -1,0 +1,9 @@
+// Local signing identity. Checked in empty on purpose.
+//
+// With no team, Xcode signs ad-hoc ("Sign to Run Locally"). That runs, but the
+// code identity changes on every rebuild, so macOS re-prompts for camera access
+// and for Keychain access to the enrolled template.
+//
+// Set your Developer ID team here to get a stable identity:
+// DEVELOPMENT_TEAM = ABCDE12345
+DEVELOPMENT_TEAM =
