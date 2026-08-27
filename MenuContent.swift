@@ -15,6 +15,16 @@ struct MenuContent: View {
                 readings
             }
 
+            if let issue = sentry.authIssue {
+                separator
+                Label(issue, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+            }
+
             separator
 
             if !sentry.isEnrolled {
@@ -54,7 +64,13 @@ struct MenuContent: View {
             separator
 
             MenuRow("Quit VAKT…", systemImage: "power", shortcut: "⌘Q") {
-                run { if await AuthGate.authenticate(for: .quit) { NSApp.terminate(nil) } }
+                run {
+                    // Quitting is an unwind: a Mac that cannot authenticate must
+                    // still be able to stop the app.
+                    if await AuthGate.authenticate(for: .quit) != .refused {
+                        NSApp.terminate(nil)
+                    }
+                }
             }
         }
         .padding(6)

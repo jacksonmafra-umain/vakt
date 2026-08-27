@@ -27,11 +27,26 @@ struct SettingsView: View {
                 Stepper("every \(Int(draft.idleBurstEvery))s while idle",
                         value: $draft.idleBurstEvery, in: 3...60, step: 1)
             }
+            Section("Authorisation") {
+                LabeledContent("Changes are confirmed with") {
+                    Text(AuthGate.availability.summary)
+                        .foregroundStyle(AuthGate.availability.reason == nil ? Color.secondary : Color.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Section {
                 Button("Save…") {
                     Task {
-                        guard await AuthGate.authenticate(for: .changeRules) else {
-                            message = "Not saved — authentication failed."; return
+                        switch await AuthGate.authenticate(for: .changeRules) {
+                        case .authorised:
+                            break
+                        case .refused:
+                            message = "Not saved — authentication failed."
+                            return
+                        case .unavailable(let reason):
+                            // Loosening the rules is a weakening, so it stays shut.
+                            message = "Not saved. \(reason)"
+                            return
                         }
                         PolicyStore.save(draft)
                         sentry.policy = draft
