@@ -44,6 +44,10 @@ final class LivenessEngine {
         var windowSeconds: Double = 6.0
         /// Minimum frame pairs before we are willing to call spoof.
         var minSamples: Int = 24
+        /// And they must span this long. 24 pairs arrive in under a second at
+        /// 30fps — long enough to catch someone mid-blink and call them a photo.
+        /// A spoof verdict is a screen lock, so it has to earn several seconds.
+        var minSpanSeconds: Double = 4.0
         /// Non-rigid displacement, as a fraction of interocular distance, that
         /// counts as a fully "alive" face. ~2% ≈ a visible blink or lip move.
         var fullMotion: Double = 0.020
@@ -186,9 +190,13 @@ final class LivenessEngine {
                 + tuning.weightBlink * (r.blinkObserved ? 1 : 0)
                 + tuning.weightJitter * jitter
 
+        let span = (energies.last?.t ?? 0) - (energies.first?.t ?? 0)
+
         if r.score >= tuning.liveAt {
             r.verdict = .live
-        } else if r.samples >= tuning.minSamples && r.score <= tuning.spoofAt {
+        } else if r.samples >= tuning.minSamples,
+                  span >= tuning.minSpanSeconds,
+                  r.score <= tuning.spoofAt {
             r.verdict = .spoofSuspected
         } else {
             r.verdict = .undecided
