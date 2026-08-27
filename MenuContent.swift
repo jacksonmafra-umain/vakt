@@ -1,7 +1,9 @@
 import SwiftUI
+import AppKit
 
 struct MenuContent: View {
     @ObservedObject var sentry: SentryController
+    @Environment(\.openWindow) private var openWindow
     @State private var busy = false
 
     var body: some View {
@@ -33,18 +35,22 @@ struct MenuContent: View {
             Divider()
 
             if !sentry.isEnrolled {
-                Button("Enrol my face…") { run { await sentry.beginEnrollment() } }
+                Button("Enrol my face…") { openEnrollment() }
             } else if sentry.isArmed {
                 Button("Disarm…") { run { await sentry.requestDisarm() } }
                 Button("Lock now") { sentry.lockManually() }
             } else {
                 Button("Arm…") { run { await sentry.requestArm() } }
-                Button("Re-enrol my face…") { run { await sentry.beginEnrollment() } }
+                Button("Re-enrol my face…") { openEnrollment() }
                 Button("Forget my face…") { run { await sentry.forgetEnrollment() } }
             }
 
             Divider()
             SettingsLink { Text("Settings…") }
+            Button("About VAKT") {
+                openWindow(id: AboutWindow.id)
+                NSApp.activate(ignoringOtherApps: true)
+            }
             Button("Quit VAKT…") {
                 run {
                     if await AuthGate.authenticate(for: .quit) { NSApp.terminate(nil) }
@@ -54,6 +60,13 @@ struct MenuContent: View {
         .padding(14)
         .frame(width: 260)
         .disabled(busy)
+    }
+
+    /// A menu-bar-only app opens windows behind everything else unless it is
+    /// activated first.
+    private func openEnrollment() {
+        openWindow(id: EnrollmentWindow.id)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func run(_ work: @escaping () async -> Void) {
