@@ -2,6 +2,42 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.1 — 2026-08-27
+
+Getting VAKT installed and actually running without having to remember it.
+
+### Added
+
+- **Start watching as soon as VAKT launches** (`Policy.armAtLaunch`, off by
+  default, in Settings). The LaunchAgent already started the app at login, but the
+  app came up disarmed and waited for a decision nobody makes — so "starts at
+  login" protected nothing. Arming is the one gated action that does not weaken
+  anything, since it turns protection on against a template only you enrolled, so
+  the automatic path does not authenticate. Disarming still does.
+
+- `install.sh`, shipped inside the release zip. It stops any running copy — first
+  unloading the LaunchAgent, which would otherwise relaunch VAKT in the middle of
+  the copy — installs to `/Applications`, clears the `com.apple.quarantine` flag
+  that makes macOS refuse to open a downloaded un-notarised app, verifies the
+  bundle with `codesign`, and launches it. Every command is printed before it
+  runs; `--dry-run` prints them and changes nothing. Flags: `--launch-agent`,
+  `--dest`, `--no-open`, `--dry-run`.
+
+  It clears quarantine for that one bundle and nothing else. No
+  `spctl --master-disable`, no system-wide Gatekeeper change.
+
+- The release zip now also carries `INSTALL.md` and the LaunchAgent plist, so
+  everything needed is in one download.
+
+### Fixed
+
+- `install.sh` died with `SUDO[@]: unbound variable` under `/bin/bash`, which on
+  macOS is still bash 3.2 — expanding an empty array trips `set -u` there. Sudo is
+  a function now, not an array prefix.
+- The writability check ran before the destination was created, so it asked for
+  administrator rights when it did not need them. It now tests the closest
+  existing ancestor.
+
 ## 0.2.0 — 2026-08-27
 
 Anti-replay work: the first release that tries to answer "what if it is a video
@@ -37,10 +73,6 @@ simply did not have.
 - `Depth` and `Scene coupling` readings in the menu, alongside liveness and match.
 - XcodeGen project generation (`project.yml`), so the Xcode project is disposable
   rather than a checked-in artefact.
-- `install.sh`, shipped inside the release zip: stops any running copy, installs
-  to `/Applications`, clears the download quarantine flag, verifies the bundle and
-  launches it. Prints every command before running it, and `--dry-run` changes
-  nothing. Optional `--launch-agent`, `--dest` and `--no-open`.
 
 ### Changed
 

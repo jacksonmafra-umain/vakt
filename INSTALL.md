@@ -38,7 +38,7 @@ enrolled face template is a set of float vectors in the Keychain marked
 2. Run the installer that comes with it:
 
    ```sh
-   cd ~/Downloads/VAKT-0.2.0
+   cd ~/Downloads/VAKT-0.2.1
    ./install.sh
    ```
 
@@ -65,7 +65,7 @@ enrolled face template is a set of float vectors in the Keychain marked
 The script does exactly this:
 
 ```sh
-mv ~/Downloads/VAKT-0.2.0/VAKT.app /Applications/
+mv ~/Downloads/VAKT-0.2.1/VAKT.app /Applications/
 xattr -dr com.apple.quarantine /Applications/VAKT.app
 open /Applications/VAKT.app
 ```
@@ -165,13 +165,34 @@ and an intruder wakes it straight back up:
 sysadminctl -screenLock immediate -password -
 ```
 
-**Survive a force-quit.** Load the LaunchAgent so the app comes back if it is
-killed:
+**Start at login, and survive a force-quit.** The LaunchAgent does both — its
+`RunAtLoad` starts VAKT when you log in, its `KeepAlive` brings it back if the
+process dies or someone force-quits it:
+
+```sh
+./install.sh --launch-agent
+```
+
+Or by hand:
 
 ```sh
 cp com.jacksonmafra.vakt.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jacksonmafra.vakt.plist
 ```
+
+**Then turn on "Start watching as soon as VAKT launches"** in Settings. This is
+the half people miss: the LaunchAgent launches the *app*, and without that toggle
+the app comes up disarmed, waiting for a decision you were trying not to have to
+remember. With it on, logging in is enough.
+
+Arming is the one gated action that does not weaken anything — it turns protection
+on, against a template only you enrolled — so the automatic path does not ask for
+Touch ID. Disarming, enrolling and changing the rules still do.
+
+Note that System Settings › General › Login Items will *not* list VAKT: a
+LaunchAgent in `~/Library/LaunchAgents` is a different mechanism from the login
+items the UI manages. `launchctl print gui/$(id -u)/com.jacksonmafra.vakt` is how
+you check it is loaded.
 
 The plist points at `/Applications/VAKT.app`; edit it if you keep the app
 elsewhere. To undo:

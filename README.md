@@ -189,8 +189,9 @@ Put your team in `Local.xcconfig` to stop that:
 DEVELOPMENT_TEAM = ABCDE12345
 ```
 
-For it to survive a force-quit, copy `VAKT.app` to `/Applications` and load the
-LaunchAgent:
+To start at login and survive a force-quit, copy `VAKT.app` to `/Applications` and
+load the LaunchAgent — then turn on **Start watching as soon as VAKT launches** in
+Settings, or the app will come up at login and sit there disarmed:
 
 ```sh
 cp com.jacksonmafra.vakt.plist ~/Library/LaunchAgents/

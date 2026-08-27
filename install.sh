@@ -8,7 +8,7 @@
 # reasonable thing to do for software you have decided to trust.
 #
 #   ./install.sh                       install to /Applications and open it
-#   ./install.sh --launch-agent        also relaunch VAKT if it is force-quit
+#   ./install.sh --launch-agent        start VAKT at login, and after a force-quit
 #   ./install.sh --dest ~/Applications install somewhere else
 #   ./install.sh --no-open             install without launching
 #   ./install.sh --dry-run             print what would happen, change nothing
@@ -125,7 +125,7 @@ fi
 
 # 5. Optional: survive a force-quit.
 if [ "$INSTALL_AGENT" = yes ]; then
-    say "Installing the LaunchAgent"
+    say "Installing the LaunchAgent (starts VAKT at login, relaunches if killed)"
     SOURCE_PLIST="$SCRIPT_DIR/$AGENT_PLIST"
     [ -f "$SOURCE_PLIST" ] || die "$AGENT_PLIST is not next to this script."
     if [ "$TARGET" != "/Applications/$APP_NAME" ]; then
@@ -148,7 +148,7 @@ cat <<'DONE'
 Installed. VAKT is a menu-bar app: look for the eye icon, there is no Dock icon
 and no main window. With no face on file it opens the enrolment window by itself.
 
-Two things worth doing next:
+Three things worth doing next:
 
   1. Require the password immediately after the screen locks, or VAKT locks and
      an intruder wakes it straight back up:
@@ -156,6 +156,10 @@ Two things worth doing next:
        sysadminctl -screenLock immediate -password -
 
   2. Grant camera access when asked. Without it VAKT cannot see anything.
+
+  3. Turn on "Start watching as soon as VAKT launches" in Settings. Starting at
+     login only launches the app — without that toggle it comes up disarmed and
+     waits for you to remember.
 
 The camera LED lights whenever VAKT samples. It is wired to the sensor in
 hardware — treat the blinking LED as an honest "armed" indicator.
