@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Combine
 import CoreVideo
+import AVFoundation
 
 /// The state machine. Consumes frames, produces one of a small number of
 /// decisions, and is the only thing in the app allowed to call `Locker`.
@@ -14,6 +15,19 @@ final class SentryController: ObservableObject {
     @Published private(set) var isEnrolled = false
     @Published var policy: Policy = PolicyStore.load()
 
+    /// Non-nil exactly while the enrolment window should be showing progress.
+    @Published private(set) var enrollmentStatus: EnrollmentStatus?
+
+    struct EnrollmentStatus: Equatable {
+        var captured = 0
+        var target = 18
+        var feedback: EnrollmentFeedback = .noFace
+        var livenessScore: Double = 0
+        var blinkObserved = false
+        var quality: Float = 0
+        var progress: Double { target > 0 ? min(1, Double(captured) / Double(target)) : 0 }
+    }
+
     private let capture = CaptureEngine()
     private let analyzer = FaceAnalyzer()
     private let liveness = LivenessEngine()
@@ -25,6 +39,7 @@ final class SentryController: ObservableObject {
     private var spoofSince: Date?
     private var darkSince: Date?
     private var enrolling: EnrollmentSession?
+    private var wasArmedBeforeEnrollment = false
     private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -92,7 +107,15 @@ final class SentryController: ObservableObject {
         guard isArmed else { return }
 
         if let session = enrolling {
-            session.consume(frame: frame, analyzer: analyzer, liveness: liveness, identity: identity)
+            let result = session.consume(frame: frame, analyzer: analyzer,
+                                         liveness: liveness, identity: identity)
+            if let report = result.liveness { lastLiveness = report }
+            enrollmentStatus = EnrollmentStatus(captured: session.vectors.count,
+                                                target: session.target,
+                                                feedback: result.feedback,
+                                                livenessScore: result.liveness?.score ?? 0,
+                                                blinkObserved: result.liveness?.blinkObserved ?? false,
+                                                quality: result.quality)
             if session.isComplete { finishEnrollment(session) }
             return
         }
@@ -217,10 +240,14 @@ final class SentryController: ObservableObject {
 
     // MARK: - Enrollment
 
-    func beginEnrollment() async {
-        guard await AuthGate.authenticate(for: .enroll) else { return }
+    @discardableResult
+    func beginEnrollment() async -> Bool {
+        guard await AuthGate.authenticate(for: .enroll) else { return false }
         liveness.reset()
-        enrolling = EnrollmentSession(embedderIdentifier: identity.embedderIdentifier())
+        wasArmedBeforeEnrollment = isArmed
+        let session = EnrollmentSession(embedderIdentifier: identity.embedderIdentifier())
+        enrolling = session
+        enrollmentStatus = EnrollmentStatus(target: session.target)
         if !isArmed {
             if policy.holdSystemAwake { power.hold() }
             state = .verifying
@@ -229,12 +256,36 @@ final class SentryController: ObservableObject {
             capture.setCadence(.continuous)
         }
         EventLog.shared.record("enroll.begin", "Capturing owner template.")
+        return true
     }
+
+    /// Bailing out of enrolment leaves the app exactly as it was before, rather
+    /// than half-armed with the camera still on.
+    func cancelEnrollment() {
+        guard enrolling != nil else { return }
+        enrolling = nil
+        enrollmentStatus = nil
+        liveness.reset()
+        if wasArmedBeforeEnrollment {
+            capture.setCadence(.burst(onSeconds: policy.idleBurstOn,
+                                      everySeconds: policy.idleBurstEvery))
+            state = .searching(since: Date())
+        } else {
+            disarm()
+        }
+        EventLog.shared.record("enroll.cancelled", "Enrolment stopped before completion.")
+    }
+
+    var isEnrolling: Bool { enrolling != nil }
+
+    /// The live capture session, for the enrolment preview layer.
+    var previewSession: AVCaptureSession { capture.previewSession }
 
     var enrollmentProgress: Double { enrolling?.progress ?? 0 }
 
     private func finishEnrollment(_ session: EnrollmentSession) {
         enrolling = nil
+        enrollmentStatus = nil
         let template = OwnerTemplate(embedderIdentifier: session.embedderIdentifier,
                                      vectors: session.vectors,
                                      createdAt: Date(),
@@ -243,7 +294,10 @@ final class SentryController: ObservableObject {
             identity.updateTemplate(template)
             isEnrolled = true
             EventLog.shared.record("enroll.done", "\(template.vectors.count) vectors stored.")
-            arm()
+            // Deliberately does not arm. Arming straight out of enrolment locked
+            // the screen seconds later, before anyone had a chance to read the
+            // liveness numbers — arming is a decision, not a side effect.
+            disarm()
         } else {
             EventLog.shared.record("enroll.failed", "Keychain write rejected.")
             disarm()
@@ -261,12 +315,34 @@ final class SentryController: ObservableObject {
     }
 }
 
+/// Why a frame was or was not folded into the template. Surfaced in the
+/// enrolment window: silent rejection looks like a broken camera.
+enum EnrollmentFeedback: Equatable {
+    case noFace
+    case tooFar
+    case lowQuality
+    case notLive
+    case tooSimilar
+    case accepted
+
+    var message: String {
+        switch self {
+        case .noFace:     return "No face in frame. Sit in front of the camera."
+        case .tooFar:     return "Too far away. Move closer."
+        case .lowQuality: return "The image is too blurry or too dark."
+        case .notLive:    return "Confirming you are a living face — blink, and move your head a little."
+        case .tooSimilar: return "Captured. Now change angle slightly: left, right, up, down."
+        case .accepted:   return "Captured."
+        }
+    }
+}
+
 /// Collects a spread of embeddings. Only frames that pass liveness are accepted,
 /// so you cannot accidentally enrol a photo of yourself.
 final class EnrollmentSession {
     let embedderIdentifier: String
     private(set) var vectors: [[Float]] = []
-    private let target = 18
+    let target = 18
     private var lastAccepted: CFTimeInterval = 0
 
     init(embedderIdentifier: String) { self.embedderIdentifier = embedderIdentifier }
@@ -274,23 +350,43 @@ final class EnrollmentSession {
     var progress: Double { min(1, Double(vectors.count) / Double(target)) }
     var isComplete: Bool { vectors.count >= target }
 
+    struct Result {
+        let feedback: EnrollmentFeedback
+        let liveness: LivenessReport?
+        let quality: Float
+    }
+
+    @discardableResult
     func consume(frame: CaptureEngine.Frame,
                  analyzer: FaceAnalyzer,
                  liveness: LivenessEngine,
-                 identity: IdentityEngine) {
+                 identity: IdentityEngine) -> Result {
         let samples = analyzer.analyze(pixelBuffer: frame.pixelBuffer)
-        guard let s = samples.max(by: { $0.interocular < $1.interocular }) else { return }
+        guard let s = samples.max(by: { $0.interocular < $1.interocular }) else {
+            return Result(feedback: .noFace, liveness: nil, quality: 0)
+        }
         let report = liveness.ingest(s)
-        guard report.verdict == .live,
-              s.captureQuality >= 0.45,
-              s.time - lastAccepted > 0.35,
-              let v = try? identity.embed(pixelBuffer: frame.pixelBuffer, face: s.observation)
-        else { return }
+
+        func result(_ f: EnrollmentFeedback) -> Result {
+            Result(feedback: f, liveness: report, quality: s.captureQuality)
+        }
+
+        guard s.interocular >= 30 else { return result(.tooFar) }
+        guard s.captureQuality >= FaceQuality.minimum else { return result(.lowQuality) }
+        guard report.verdict == .live else { return result(.notLive) }
+        // Rate-limit: consecutive frames of one pose are near-identical anyway.
+        guard s.time - lastAccepted > 0.35 else { return result(.tooSimilar) }
+        guard let v = try? identity.embed(pixelBuffer: frame.pixelBuffer, face: s.observation) else {
+            return result(.lowQuality)
+        }
 
         // Skip near-duplicates so the template covers real pose variety.
-        if let closest = vectors.map({ VectorMath.cosine(v, $0) }).max(), closest > 0.985 { return }
+        if let closest = vectors.map({ VectorMath.cosine(v, $0) }).max(), closest > 0.985 {
+            return result(.tooSimilar)
+        }
 
         vectors.append(v)
         lastAccepted = s.time
+        return result(.accepted)
     }
 }
