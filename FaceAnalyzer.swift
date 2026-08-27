@@ -176,3 +176,131 @@ struct SimilarityTransform {
                                    toCentroid: bc)
     }
 }
+
+/// A plane-to-plane projective map. Everything visible on a flat panel — a
+/// printed photo, a phone, a monitor playing a generated video — moves between
+/// frames under one of these, no matter how the content itself animates. A real
+/// head does not: its landmarks sit at different depths, so rotation produces
+/// parallax that no homography can absorb.
+struct Homography {
+    /// Row-major 3x3, h[8] fixed at 1.
+    let h: [Double]
+
+    func apply(_ p: CGPoint) -> CGPoint {
+        let x = Double(p.x), y = Double(p.y)
+        let w = h[6] * x + h[7] * y + h[8]
+        guard abs(w) > 1e-12 else { return p }
+        return CGPoint(x: (h[0] * x + h[1] * y + h[2]) / w,
+                       y: (h[3] * x + h[4] * y + h[5]) / w)
+    }
+
+    /// Normalised DLT: condition both point sets to zero mean and mean distance
+    /// √2, solve the 8x8 system, then undo the conditioning. Without the
+    /// normalisation the system is badly scaled at pixel magnitudes and the
+    /// residual we are trying to measure drowns in solver error.
+    static func fit(from a: [CGPoint], to b: [CGPoint]) -> Homography? {
+        guard a.count == b.count, a.count >= 4 else { return nil }
+
+        guard let (na, ta) = normalise(a), let (nb, tb) = normalise(b) else { return nil }
+
+        // 2n x 8 least squares, solved as the 8x8 normal equations.
+        var ata = [Double](repeating: 0, count: 64)
+        var atb = [Double](repeating: 0, count: 8)
+
+        for i in 0..<na.count {
+            let x = Double(na[i].x), y = Double(na[i].y)
+            let u = Double(nb[i].x), v = Double(nb[i].y)
+            let rows: [[Double]] = [
+                [x, y, 1, 0, 0, 0, -u * x, -u * y],
+                [0, 0, 0, x, y, 1, -v * x, -v * y]
+            ]
+            let targets = [u, v]
+            for (row, target) in zip(rows, targets) {
+                for r in 0..<8 {
+                    atb[r] += row[r] * target
+                    for c in 0..<8 { ata[r * 8 + c] += row[r] * row[c] }
+                }
+            }
+        }
+
+        guard let solved = solve(ata, atb, n: 8) else { return nil }
+        let hn = solved + [1.0]
+
+        // H = Tb⁻¹ · Hn · Ta
+        let m = multiply(multiply(tb.inverted, hn), ta.matrix)
+        guard abs(m[8]) > 1e-12 else { return nil }
+        return Homography(h: m.map { $0 / m[8] })
+    }
+
+    /// Mean reprojection error, in the units the points came in.
+    static func residual(_ h: Homography, from a: [CGPoint], to b: [CGPoint]) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return 0 }
+        var total = 0.0
+        for i in 0..<a.count {
+            let p = h.apply(a[i])
+            total += Double(hypot(p.x - b[i].x, p.y - b[i].y))
+        }
+        return total / Double(a.count)
+    }
+
+    // MARK: - Linear algebra, kept local and small
+
+    private struct Conditioning {
+        let scale: Double
+        let cx: Double
+        let cy: Double
+
+        /// s·(p − c)
+        var matrix: [Double] { [scale, 0, -scale * cx, 0, scale, -scale * cy, 0, 0, 1] }
+        /// p/s + c
+        var inverted: [Double] { [1 / scale, 0, cx, 0, 1 / scale, cy, 0, 0, 1] }
+    }
+
+    private static func normalise(_ p: [CGPoint]) -> ([CGPoint], Conditioning)? {
+        let c = Geometry.centroid(p)
+        let mean = p.reduce(0.0) { $0 + Double(hypot($1.x - c.x, $1.y - c.y)) } / Double(p.count)
+        guard mean > 1e-9 else { return nil }
+        let scale = 2.0.squareRoot() / mean
+        let out = p.map { CGPoint(x: CGFloat((Double($0.x) - Double(c.x)) * scale),
+                                 y: CGFloat((Double($0.y) - Double(c.y)) * scale)) }
+        return (out, Conditioning(scale: scale, cx: Double(c.x), cy: Double(c.y)))
+    }
+
+    private static func multiply(_ a: [Double], _ b: [Double]) -> [Double] {
+        var out = [Double](repeating: 0, count: 9)
+        for r in 0..<3 {
+            for c in 0..<3 {
+                var sum = 0.0
+                for k in 0..<3 { sum += a[r * 3 + k] * b[k * 3 + c] }
+                out[r * 3 + c] = sum
+            }
+        }
+        return out
+    }
+
+    /// Gauss-Jordan with partial pivoting. n is small and fixed at 8.
+    private static func solve(_ matrix: [Double], _ rhs: [Double], n: Int) -> [Double]? {
+        var m = matrix, b = rhs
+        for col in 0..<n {
+            var pivot = col
+            for row in (col + 1)..<n where abs(m[row * n + col]) > abs(m[pivot * n + col]) {
+                pivot = row
+            }
+            guard abs(m[pivot * n + col]) > 1e-12 else { return nil }
+            if pivot != col {
+                for c in 0..<n { m.swapAt(col * n + c, pivot * n + c) }
+                b.swapAt(col, pivot)
+            }
+            let d = m[col * n + col]
+            for c in 0..<n { m[col * n + c] /= d }
+            b[col] /= d
+            for row in 0..<n where row != col {
+                let f = m[row * n + col]
+                guard f != 0 else { continue }
+                for c in 0..<n { m[row * n + c] -= f * m[col * n + c] }
+                b[row] -= f * b[col]
+            }
+        }
+        return b
+    }
+}
