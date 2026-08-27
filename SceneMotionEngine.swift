@@ -37,9 +37,9 @@ final class SceneMotionEngine {
         /// this fraction of the face's, and points the same way.
         var agreementRatio: Double = 0.55
         var windowSeconds: CFTimeInterval = 20
-        var minSamples: Int = 6
+        var minSamples: Int = 10
         /// Fraction of agreeing samples that means "held object".
-        var couplingLimit: Double = 0.6
+        var couplingLimit: Double = 0.75
     }
 
     var tuning = Tuning()

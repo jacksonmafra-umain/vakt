@@ -220,7 +220,9 @@ final class SentryController: ObservableObject {
             // A video of you deforms and blinks like you do, so the liveness
             // score alone will call it live. What it cannot fake is depth: on a
             // panel every landmark moves under one homography.
-            if scene.heldObjectSuspected {
+            // Depth already proven means the thing in frame is a head, so any
+            // background agreement is the camera moving, not a device held up.
+            if scene.heldObjectSuspected && !report.depthConfirmed {
                 let since = spoofSince ?? Date()
                 spoofSince = since
                 state = .verifying

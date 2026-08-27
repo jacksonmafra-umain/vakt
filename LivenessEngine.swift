@@ -19,6 +19,10 @@ struct LivenessReport {
     var parallaxSamples: Int = 0
     /// The face deforms and blinks, but its geometry is provably flat.
     var planarReplaySuspected: Bool = false
+    /// Rotation produced real parallax: this is a volume, not a plane. Used to
+    /// veto the scene-coupling check, which cannot tell a held device from a
+    /// camera that moved — a nudged desk shifts face and room together too.
+    var depthConfirmed: Bool = false
     /// Head micro-motion. Near zero means a *mounted* photo (or a statue).
     var poseJitter: Double = 0
     var samples: Int = 0
@@ -226,6 +230,7 @@ final class LivenessEngine {
         if r.parallaxSamples >= tuning.parallaxMinSamples {
             r.parallaxPerRadian = Geometry.median(parallax.map(\.v))
             r.planarReplaySuspected = r.parallaxPerRadian <= tuning.planarityFloor
+            r.depthConfirmed = r.parallaxPerRadian > tuning.planarityFloor
         }
 
         r.poseJitter = max(Geometry.stdDev(yaws.map(\.v)), Geometry.stdDev(pitches.map(\.v)))
