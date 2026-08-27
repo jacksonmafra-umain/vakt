@@ -108,20 +108,37 @@ Resources/
 
 ## Build
 
-1. Xcode → new macOS App → SwiftUI → name it `VAKT`, minimum macOS 14.0.
-2. Drag `Sources/VAKT/` into the target (create groups, copy items).
-3. Replace the generated `Info.plist` and entitlements with the ones in
-   `Resources/`.
-4. Signing & Capabilities: **Hardened Runtime on, App Sandbox off**. The sandbox
-   blocks both lock paths — VAKT would detect an intruder and then be unable to
-   act on it.
-5. Build and run. Grant camera access on the first arm.
+The Xcode project is generated from `project.yml`, so it is not checked in.
+
+```sh
+brew install xcodegen                 # once
+xcodegen generate                     # writes VAKT.xcodeproj
+open VAKT.xcodeproj                   # or build from the command line:
+xcodebuild -project VAKT.xcodeproj -scheme VAKT -configuration Debug -derivedDataPath build build
+open build/Build/Products/Debug/VAKT.app
+```
+
+Grant camera access on the first arm. Edit `project.yml` and regenerate rather
+than changing project settings in Xcode — the project file is disposable.
+
+`project.yml` already pins the two settings that matter: **Hardened Runtime on,
+App Sandbox off**. The sandbox blocks both lock paths — VAKT would detect an
+intruder and then be unable to act on it.
+
+Signing is empty by default, which means ad-hoc ("Sign to Run Locally"). That
+runs, but macOS then disables Hardened Runtime and re-prompts for camera and
+Keychain access on every rebuild, because the code identity changes each time.
+Put your team in `Local.xcconfig` to stop that:
+
+```
+DEVELOPMENT_TEAM = ABCDE12345
+```
 
 For it to survive a force-quit, copy `VAKT.app` to `/Applications` and load the
 LaunchAgent:
 
 ```sh
-cp Resources/com.jacksonmafra.vakt.plist ~/Library/LaunchAgents/
+cp com.jacksonmafra.vakt.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jacksonmafra.vakt.plist
 ```
 
