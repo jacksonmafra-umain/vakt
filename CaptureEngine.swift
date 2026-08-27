@@ -30,6 +30,11 @@ final class CaptureEngine: NSObject {
     var preferredDeviceUniqueID: String?
 
     private let session = AVCaptureSession()
+
+    /// Exposed so the enrolment window can attach an `AVCaptureVideoPreviewLayer`.
+    /// A preview layer is a second *sink* on the same session, not a second
+    /// session — two sessions on one camera contend and one of them fails.
+    var previewSession: AVCaptureSession { session }
     private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "vakt.capture", qos: .userInitiated)
     private var configured = false
@@ -111,7 +116,10 @@ final class CaptureEngine: NSObject {
         }
 
         session.beginConfiguration()
-        session.sessionPreset = .medium          // 640x480-ish is plenty for landmarks
+        // 720p, falling back to medium. 640x480 finds landmarks fine but Vision
+        // rates the crop's capture quality low, which starves enrolment and
+        // makes the identity match skip frames.
+        session.sessionPreset = session.canSetSessionPreset(.hd1280x720) ? .hd1280x720 : .medium
         if session.canAddInput(input) { session.addInput(input) }
 
         output.alwaysDiscardsLateVideoFrames = true
