@@ -219,6 +219,22 @@ biometric access-control flag. If reading it required user presence, the
 background watcher would prompt for Touch ID on every frame. Protection lives on
 the write and delete paths, which go through `AuthGate`.
 
+**Macs without Touch ID.** Nothing special is needed: `AuthGate` asks for
+`.deviceOwnerAuthentication`, which is Touch ID where it exists and the login
+password (or an unlocked Apple Watch) where it does not. Settings shows which
+one this Mac will use.
+
+A Mac with **no login password at all** is the case worth knowing about, because
+authentication is then impossible and every gated control would otherwise become
+a silent no-op. VAKT splits the two directions:
+
+- Anything that *weakens* protection is refused, with the reason shown in the
+  menu: arming, enrolling, changing the rules. A guard whose own off switch is
+  unguarded is worse than no guard.
+- Anything that *unwinds* still works: disarm, forget my face, quit. Otherwise an
+  armed VAKT could be neither stopped nor quit from its own menu, while the
+  LaunchAgent relaunched it on every force-quit.
+
 **Limits — read these before trusting it.**
 
 - Passive RGB liveness is probabilistic, not a Face ID equivalent. A
