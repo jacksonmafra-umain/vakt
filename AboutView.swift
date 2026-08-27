@@ -43,7 +43,7 @@ struct AboutView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 promise("No image or video is ever written to disk.")
-                promise("No network code exists in this app.")
+                promise("The only network request is checking GitHub for updates.")
                 promise("The face template is a set of vectors in the Keychain, this device only.")
             }
             .frame(maxWidth: .infinity, alignment: .leading)

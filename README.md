@@ -255,7 +255,10 @@ tune it without guessing.
 
 ## Privacy and honest limits
 
-**Privacy.** No frames are written to disk. No network code exists in the app.
+**Privacy.** No frames are written to disk. The only network request the app ever
+makes is asking GitHub whether there is a newer release — a public feed, one host,
+no identifying payload, and switchable off in Settings. Nothing about what the
+camera sees is ever sent anywhere.
 The enrolled template is a set of float vectors in the Keychain, marked
 `WhenUnlockedThisDeviceOnly` and non-syncing; it cannot be turned back into a
 photograph of your face.

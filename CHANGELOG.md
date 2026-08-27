@@ -2,6 +2,52 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.5 — 2026-08-27
+
+### Added
+
+- **Single-instance guard.** Two bundles with the same identifier — the copy in
+  `/Applications` and a build from Xcode — each ran their own status item, camera
+  session and locking logic, and `KeepAlive` relaunched one of them whenever it
+  died. Whoever started first now wins; the newcomer logs `launch.duplicate` and
+  exits.
+- **Update checking, downloading and installing.** VAKT asks GitHub once a day
+  whether there is a newer release, and can download and install it. The install
+  is gated behind Touch ID unless "Install updates without asking" is on, because
+  an ad-hoc-signed download cannot be tied cryptographically to the same author as
+  the running app — `codesign` can say "intact", never "same hands". The download
+  is refused unless it comes over HTTPS from a github.com host, verifies with
+  `codesign`, and carries the version the release claims.
+
+  This is the first network code in VAKT, and the privacy claim has been corrected
+  to match: one host, a public feed, no identifying payload, switchable off. What
+  the camera sees still never leaves the machine.
+
+### Changed
+
+- **Locking on flat geometry is now opt-in** (`Policy.lockOnPlanarReplay`, off).
+  The homography check is sound on synthetic data but locked the owner's screen on
+  real Vision landmarks, and an unvalidated heuristic that locks you out is worse
+  than one that misses an attack. It keeps measuring and now logs
+  `planarReplay.observed` with the depth reading and sample count that would have
+  fired — the data the threshold needs before it can be trusted.
+
+### Fixed
+
+- **Every stored setting was silently reset by every upgrade that touched
+  `Policy`.** Swift's synthesised decoder throws on a missing key even when the
+  property has a default, so a policy saved by an older build became undecodable
+  and `PolicyStore.load()` quietly returned fresh defaults. Verified: a policy
+  saved with `absenceGrace = 35` came back as 25. Decoding is now field-by-field,
+  keeping defaults only for what is genuinely absent.
+- **Launch work never ran.** First-run enrolment and the update check hung off a
+  `.task` on the `MenuBarExtra` label; once that label carried a second modifier
+  the task stopped firing, with no error. Launch work lives in an
+  `NSApplicationDelegate` now, and the label is kept trivial.
+- An event recorded immediately before `exit()` was lost, because the write was
+  queued asynchronously — which swallowed the one line explaining why a duplicate
+  instance had quit.
+
 ## 0.2.4 — 2026-08-27
 
 ### Fixed
