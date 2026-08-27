@@ -26,6 +26,7 @@ enum AuthGate {
         case forget      = "delete your enrolled face"
         case changeRules = "change VAKT's rules"
         case quit        = "quit VAKT"
+        case update      = "replace VAKT with a downloaded update"
     }
 
     enum Outcome: Equatable {
