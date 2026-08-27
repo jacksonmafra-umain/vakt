@@ -38,7 +38,7 @@ enrolled face template is a set of float vectors in the Keychain marked
 2. Run the installer that comes with it:
 
    ```sh
-   cd ~/Downloads/VAKT-0.2.5
+   cd ~/Downloads/VAKT-0.2.6
    ./install.sh
    ```
 
@@ -65,7 +65,7 @@ enrolled face template is a set of float vectors in the Keychain marked
 The script does exactly this:
 
 ```sh
-mv ~/Downloads/VAKT-0.2.5/VAKT.app /Applications/
+mv ~/Downloads/VAKT-0.2.6/VAKT.app /Applications/
 xattr -dr com.apple.quarantine /Applications/VAKT.app
 open /Applications/VAKT.app
 ```

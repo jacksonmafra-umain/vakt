@@ -2,6 +2,16 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.6 — 2026-08-27
+
+### Fixed
+
+- `install.sh` aborted mid-install, leaving no VAKT running. `pkill` exits 1 when
+  it matches nothing, and by that point it usually matches nothing — the
+  `launchctl bootout` a few lines earlier has already stopped the app — so
+  `set -e` killed the script after unloading the LaunchAgent and before copying
+  anything.
+
 ## 0.2.5 — 2026-08-27
 
 ### Added
