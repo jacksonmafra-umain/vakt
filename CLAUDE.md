@@ -42,7 +42,8 @@ Single-direction data flow, one owner of the lock decision:
 CaptureEngine  → SentryController → Locker / PowerAssertion
  (AVFoundation)   (@MainActor state machine)
                       ├── FaceAnalyzer   (Vision landmarks → FaceSample)
-                      ├── LivenessEngine (is it a living head?)
+                      ├── LivenessEngine (is it a living head? plus planar-replay depth check)
+                      ├── SceneMotionEngine (is the face rigid with its background?)
                       ├── IdentityEngine (is it the owner?)
                       ├── AuthGate       (Touch ID / password for privilege changes)
                       ├── EnrollmentStore(Keychain owner template)
@@ -94,6 +95,25 @@ returns `.inconclusive` rather than producing garbage similarities. If you chang
 intended behaviour, do not "fix" it by loosening the check.
 
 All vectors are L2-normalised, so `VectorMath.cosine` is a plain dot product.
+
+### Anti-replay signals (0.2.0)
+
+Three layers answer "it is a video, not a photo", and they are deliberately
+independent — do not collapse them:
+
+- `LivenessEngine.parallaxRatio` fits a `Homography` (normalised DLT, in
+  `FaceAnalyzer.swift`) over the whole landmark set on pairs that rotated at least
+  `parallaxMinRotation`, and divides the residual by interocular distance and by
+  the rotation. A plane returns ~0 at any angle; a head returns a positive slope.
+  Verified numerically: plane 0.0000 px, depth cloud 0.99/3.95/7.35 px at 2/8/15°.
+- `SceneMotionEngine` registers patches outside the padded face box against the
+  previous frame and compares their translation with the face centroid's. It is
+  gated in the controller by `!report.depthConfirmed`, because a camera that moves
+  produces the same coupling as a device held up — never remove that veto without
+  replacing it with something that distinguishes the two.
+- `CaptureEngine.selectDevice()` refuses non-built-in cameras and honours the
+  `uniqueID` recorded in `OwnerTemplate.cameraUniqueID`. `requestArm` checks it
+  *before* authenticating, so a missing sensor does not cost a Touch ID prompt.
 
 ### Threshold changes
 
