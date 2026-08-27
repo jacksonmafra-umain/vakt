@@ -2,6 +2,24 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.3 — 2026-08-27
+
+### Fixed
+
+- **Settings never came to the front.** Two causes. The fronting helper was only
+  applied to the enrolment and about windows, so Settings had nothing bringing it
+  forward at all. And the helper it now shares only fronted a window when the view
+  was first created, which is wrong for a window SwiftUI reuses — it would have
+  come forward once and never again.
+- **Fronting no longer depends on activation.** `NSApp.activate(ignoringOtherApps:)`
+  is deprecated and the system is free to refuse; measured on macOS 26, the window
+  appeared on screen while the frontmost app never changed, leaving VAKT's window
+  behind whatever the user was reading. Windows are now raised to
+  `NSWindow.Level.floating` and dropped back to `.normal` as soon as they really
+  become key, so they do not hover over everything afterwards.
+- Settings is fronted without being re-centred, since it is a window you may have
+  placed where you want it.
+
 ## 0.2.2 — 2026-08-27
 
 Fixes the worst failure this app had: locking the screen of the person it had just

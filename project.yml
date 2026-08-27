@@ -13,8 +13,8 @@ settings:
     # queue as CVPixelBuffer and hop to @MainActor by hand. Swift 5 language
     # mode keeps that a warning instead of an error.
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.2.2"
-    CURRENT_PROJECT_VERSION: "4"
+    MARKETING_VERSION: "0.2.3"
+    CURRENT_PROJECT_VERSION: "5"
 
 targets:
   VAKT:
