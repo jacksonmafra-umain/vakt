@@ -49,7 +49,6 @@ struct MenuContent: View {
 
             MenuRow("About VAKT", systemImage: "info.circle") {
                 openWindow(id: AboutWindow.id)
-                NSApp.activate(ignoringOtherApps: true)
             }
 
             separator
@@ -108,11 +107,10 @@ struct MenuContent: View {
 
     // MARK: - Actions
 
-    /// A menu-bar-only app opens windows behind everything else unless it is
-    /// activated first.
+    /// Fronting is handled by the window itself once it exists — activating here
+    /// runs before `openWindow` has produced anything to bring forward.
     private func openEnrollment() {
         openWindow(id: EnrollmentWindow.id)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func run(_ work: @escaping () async -> Void) {

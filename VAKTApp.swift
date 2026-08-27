@@ -68,7 +68,6 @@ private struct MenuBarLabel: View {
                 guard needsEnrollment, !offered else { return }
                 offered = true
                 openWindow(id: EnrollmentWindow.id)
-                NSApp.activate(ignoringOtherApps: true)
             }
     }
 }
