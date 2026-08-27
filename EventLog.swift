@@ -28,14 +28,19 @@ final class EventLog {
         url = dir.appendingPathComponent("events.jsonl")
     }
 
+    /// `synchronously` matters when the caller is about to exit: the queued write
+    /// never lands if the process dies first, which silently swallowed the one
+    /// event explaining why a duplicate instance quit.
     func record(_ kind: String,
                 _ detail: String,
                 liveness: Double? = nil,
-                similarity: Float? = nil) {
+                similarity: Float? = nil,
+                synchronously: Bool = false) {
         let event = SentryEvent(at: Date(), kind: kind, detail: detail,
                                 livenessScore: liveness, similarity: similarity)
         logger.info("\(kind, privacy: .public): \(detail, privacy: .public)")
-        queue.async { [url] in
+
+        let write = { [url] in
             guard var line = try? JSONEncoder().encode(event) else { return }
             line.append(0x0A)
             if let handle = try? FileHandle(forWritingTo: url) {
@@ -46,6 +51,7 @@ final class EventLog {
                 try? line.write(to: url, options: .atomic)
             }
         }
+        if synchronously { queue.sync(execute: write) } else { queue.async(execute: write) }
     }
 
     func recent(limit: Int = 50) -> [SentryEvent] {
