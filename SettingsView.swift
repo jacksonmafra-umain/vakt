@@ -20,6 +20,7 @@ struct SettingsView: View {
             Section("Rules") {
                 Toggle("Lock if the camera is covered", isOn: $draft.lockOnObstruction)
                 Toggle("Lock if a second face appears", isOn: $draft.lockOnSecondFace)
+                Toggle("Lock if the face's geometry looks flat", isOn: $draft.lockOnPlanarReplay)
                 Toggle("Keep the Mac awake while armed", isOn: $draft.holdSystemAwake)
                 Toggle("Re-arm after I unlock the Mac", isOn: $draft.rearmAfterUnlock)
                 Toggle("Start watching as soon as VAKT launches", isOn: $draft.armAtLaunch)
@@ -29,6 +30,16 @@ struct SettingsView: View {
                         value: $draft.idleBurstOn, in: 1...10, step: 0.5)
                 Stepper("every \(Int(draft.idleBurstEvery))s while idle",
                         value: $draft.idleBurstEvery, in: 3...60, step: 1)
+            }
+            Section("Updates") {
+                Toggle("Check GitHub for new versions daily", isOn: $draft.checkForUpdates)
+                Toggle("Install updates without asking", isOn: $draft.installUpdatesAutomatically)
+                    .disabled(!draft.checkForUpdates)
+                Text("Checking is the only network request VAKT makes. Nothing about "
+                     + "what the camera sees is ever sent anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("Authorisation") {
                 LabeledContent("Changes are confirmed with") {

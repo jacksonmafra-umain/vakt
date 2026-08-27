@@ -3,6 +3,7 @@ import AppKit
 
 struct MenuContent: View {
     @ObservedObject var sentry: SentryController
+    @ObservedObject var updater: Updater
     @Environment(\.openWindow) private var openWindow
     @State private var busy = false
 
@@ -50,6 +51,8 @@ struct MenuContent: View {
                 }
             }
 
+            updateSection
+
             separator
 
             SettingsLink {
@@ -79,6 +82,49 @@ struct MenuContent: View {
     }
 
     // MARK: - Sections
+
+    /// Only takes space when it has something to say.
+    @ViewBuilder
+    private var updateSection: some View {
+        switch updater.state {
+        case .available(let release):
+            separator
+            MenuRow("Download update \(release.version)…", systemImage: "arrow.down.circle") {
+                Task { await updater.download(release) }
+            }
+        case .downloading(let release):
+            separator
+            note("Downloading \(release.version)…")
+        case .readyToInstall(let release, let app):
+            separator
+            MenuRow("Install \(release.version) and restart…", systemImage: "arrow.triangle.2.circlepath") {
+                run {
+                    // Replacing the watcher's own binary is a privilege change,
+                    // and an ad-hoc signature cannot prove the download came from
+                    // the same author. One deliberate authentication.
+                    var allowed = sentry.policy.installUpdatesAutomatically
+                    if !allowed {
+                        allowed = await AuthGate.authenticate(for: .update) == .authorised
+                    }
+                    if allowed { try? updater.install(release, from: app) }
+                }
+            }
+        case .failed(let message):
+            separator
+            note("Update check failed: \(message)")
+        case .idle, .checking, .upToDate:
+            EmptyView()
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+    }
 
     private var status: some View {
         HStack(spacing: 8) {
