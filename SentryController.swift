@@ -15,6 +15,10 @@ final class SentryController: ObservableObject {
     @Published private(set) var isEnrolled = false
     @Published var policy: Policy = PolicyStore.load()
 
+    /// Set when this Mac cannot authenticate at all, so the UI can say why the
+    /// controls are refusing rather than appearing broken.
+    @Published private(set) var authIssue: String?
+
     /// Non-nil exactly while the enrolment window should be showing progress.
     @Published private(set) var enrollmentStatus: EnrollmentStatus?
 
@@ -63,16 +67,34 @@ final class SentryController: ObservableObject {
 
     func requestArm() async {
         guard isEnrolled else { return }
-        guard await AuthGate.authenticate(for: .arm) else { return }
-        arm()
+        switch await AuthGate.authenticate(for: .arm) {
+        case .authorised:
+            authIssue = nil
+            arm()
+        case .refused:
+            EventLog.shared.record("arm.denied", "Authentication failed or cancelled.")
+        case .unavailable(let reason):
+            // Refuse to arm: VAKT would be a guard whose own off switch is
+            // unguarded, and that is worse than not arming.
+            authIssue = reason
+            EventLog.shared.record("arm.unavailable", reason)
+        }
     }
 
     func requestDisarm() async {
-        guard await AuthGate.authenticate(for: .disarm) else {
+        switch await AuthGate.authenticate(for: .disarm) {
+        case .authorised:
+            authIssue = nil
+            disarm()
+        case .refused:
             EventLog.shared.record("disarm.denied", "Authentication failed or cancelled.")
-            return
+        case .unavailable(let reason):
+            // Unwinding is never blocked. Refusing here would leave an armed app
+            // that cannot be stopped from its own menu.
+            authIssue = reason
+            EventLog.shared.record("disarm.unauthenticated", reason)
+            disarm()
         }
-        disarm()
     }
 
     private func arm() {
@@ -242,7 +264,17 @@ final class SentryController: ObservableObject {
 
     @discardableResult
     func beginEnrollment() async -> Bool {
-        guard await AuthGate.authenticate(for: .enroll) else { return false }
+        switch await AuthGate.authenticate(for: .enroll) {
+        case .authorised:
+            authIssue = nil
+        case .refused:
+            return false
+        case .unavailable(let reason):
+            // Enrolling would write a template that nothing can later protect.
+            authIssue = reason
+            EventLog.shared.record("enroll.unavailable", reason)
+            return false
+        }
         liveness.reset()
         wasArmedBeforeEnrollment = isArmed
         let session = EnrollmentSession(embedderIdentifier: identity.embedderIdentifier())
@@ -305,7 +337,18 @@ final class SentryController: ObservableObject {
     }
 
     func forgetEnrollment() async {
-        guard await AuthGate.authenticate(for: .forget) else { return }
+        switch await AuthGate.authenticate(for: .forget) {
+        case .authorised:
+            authIssue = nil
+        case .refused:
+            return
+        case .unavailable(let reason):
+            // Deleting your own template is an unwind, not a weakening: without
+            // this escape hatch a Mac that cannot authenticate keeps a template
+            // it can never use or remove.
+            authIssue = reason
+            EventLog.shared.record("enroll.delete.unauthenticated", reason)
+        }
         EnrollmentStore.delete()
         identity.updateTemplate(nil)
         isEnrolled = false
