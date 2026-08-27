@@ -8,6 +8,10 @@ struct OwnerTemplate: Codable {
     var vectors: [[Float]]
     var createdAt: Date
     var updatedAt: Date
+    /// The camera this template was captured through. Optional so templates
+    /// written before pinning existed still decode; when set, VAKT refuses to
+    /// watch through any other sensor.
+    var cameraUniqueID: String?
 }
 
 /// Keychain-backed storage.

@@ -19,6 +19,9 @@ final class SentryController: ObservableObject {
     /// controls are refusing rather than appearing broken.
     @Published private(set) var authIssue: String?
 
+    /// Set when the camera VAKT is willing to use is unavailable or refused.
+    @Published private(set) var cameraIssue: String?
+
     /// Non-nil exactly while the enrolment window should be showing progress.
     @Published private(set) var enrollmentStatus: EnrollmentStatus?
 
@@ -54,11 +57,21 @@ final class SentryController: ObservableObject {
         isEnrolled = identity.isEnrolled
         if !isEnrolled { state = .notEnrolled }
 
+        // Watch only through the sensor the template was captured on. A virtual
+        // camera can feed synthetic video that no optical signal can question.
+        capture.pinnedDeviceUniqueID = template?.cameraUniqueID
+
         capture.onFrame = { [weak self] frame in
             Task { @MainActor in self?.handle(frame: frame) }
         }
-        capture.onFailure = { message in
+        capture.onFailure = { [weak self] message in
             EventLog.shared.record("capture.failure", message)
+            Task { @MainActor in
+                self?.cameraIssue = message
+                // A watcher that cannot see is not watching. Say so rather than
+                // sitting in `searching` forever.
+                if self?.isArmed == true { self?.disarmBecauseBlind() }
+            }
         }
         observeScreenLock()
     }
@@ -67,6 +80,14 @@ final class SentryController: ObservableObject {
 
     func requestArm() async {
         guard isEnrolled else { return }
+        // Fail before asking for Touch ID: nothing here is worth authenticating
+        // if the sensor of record is missing.
+        if case .failure(let problem) = capture.selectDevice() {
+            cameraIssue = problem.message
+            EventLog.shared.record("arm.camera.refused", problem.message)
+            return
+        }
+        cameraIssue = nil
         switch await AuthGate.authenticate(for: .arm) {
         case .authorised:
             authIssue = nil
@@ -106,6 +127,12 @@ final class SentryController: ObservableObject {
         capture.start(cadence: .burst(onSeconds: policy.idleBurstOn,
                                       everySeconds: policy.idleBurstEvery))
         EventLog.shared.record("armed", "VAKT is watching.")
+    }
+
+    /// The camera failed or was refused while armed. Stop pretending to watch.
+    private func disarmBecauseBlind() {
+        EventLog.shared.record("disarmed.blind", cameraIssue ?? "The camera is unavailable.")
+        disarm()
     }
 
     private func disarm() {
@@ -321,9 +348,11 @@ final class SentryController: ObservableObject {
         let template = OwnerTemplate(embedderIdentifier: session.embedderIdentifier,
                                      vectors: session.vectors,
                                      createdAt: Date(),
-                                     updatedAt: Date())
+                                     updatedAt: Date(),
+                                     cameraUniqueID: capture.activeDeviceUniqueID)
         if EnrollmentStore.save(template) {
             identity.updateTemplate(template)
+            capture.pinnedDeviceUniqueID = template.cameraUniqueID
             isEnrolled = true
             EventLog.shared.record("enroll.done", "\(template.vectors.count) vectors stored.")
             // Deliberately does not arm. Arming straight out of enrolment locked

@@ -15,7 +15,7 @@ struct MenuContent: View {
                 readings
             }
 
-            if let issue = sentry.authIssue {
+            if let issue = sentry.cameraIssue ?? sentry.authIssue {
                 separator
                 Label(issue, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
