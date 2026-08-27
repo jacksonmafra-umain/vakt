@@ -57,8 +57,11 @@ final class LivenessEngine {
         var minSamples: Int = 24
         /// And they must span this long. 24 pairs arrive in under a second at
         /// 30fps — long enough to catch someone mid-blink and call them a photo.
-        /// A spoof verdict is a screen lock, so it has to earn several seconds.
-        var minSpanSeconds: Double = 4.0
+        /// A spoof verdict is a screen lock, so it has to earn real time. Raised
+        /// to 10s after two observed false locks on a reading, still owner, where
+        /// the score sat at 0.247 and 0.222 against a 0.25 floor while identity
+        /// was 0.88 and 0.90 confident.
+        var minSpanSeconds: Double = 10.0
         /// Non-rigid displacement, as a fraction of interocular distance, that
         /// counts as a fully "alive" face. ~2% ≈ a visible blink or lip move.
         var fullMotion: Double = 0.020

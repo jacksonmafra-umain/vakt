@@ -53,6 +53,15 @@ struct Policy: Codable, Equatable {
     /// Re-arm automatically after you unlock the Mac yourself.
     var rearmAfterUnlock = true
 
+    /// How long an authenticated unlock suppresses the *spoof-shaped* locks —
+    /// still face, flat geometry, held device.
+    ///
+    /// Touch ID or your password is a far stronger presence signal than anything
+    /// the camera infers, and re-locking seconds after you proved who you are is
+    /// the worst failure this app has: it happened twice in 18 seconds with the
+    /// identity match at 0.88 and 0.90. Absence and strangers are unaffected.
+    var trustAfterUnlock: TimeInterval = 90
+
     /// Start watching as soon as VAKT launches, without asking.
     ///
     /// Arming is the only gated action that does not weaken anything — it turns

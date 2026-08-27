@@ -47,6 +47,7 @@ final class SentryController: ObservableObject {
     private var strangerSince: Date?
     private var spoofSince: Date?
     private var darkSince: Date?
+    private var unlockedByOwnerAt: Date?
     private var enrolling: EnrollmentSession?
     private var wasArmedBeforeEnrollment = false
     private var observers: [NSObjectProtocol] = []
@@ -229,6 +230,17 @@ final class SentryController: ObservableObject {
             // panel every landmark moves under one homography.
             // Depth already proven means the thing in frame is a head, so any
             // background agreement is the camera moving, not a device held up.
+            // Three ways to be told "that is not a living head", and all three
+            // are inferences about a person who is sitting still. None of them
+            // outranks a Touch ID unlock from a moment ago.
+            if let unlocked = unlockedByOwnerAt,
+               Date().timeIntervalSince(unlocked) < policy.trustAfterUnlock {
+                spoofSince = nil
+                lastFaceSeen = Date()
+                state = .ownerPresent
+                return
+            }
+
             if scene.heldObjectSuspected && !report.depthConfirmed {
                 let since = spoofSince ?? Date()
                 spoofSince = since
@@ -257,6 +269,15 @@ final class SentryController: ObservableObject {
                 state = .ownerPresent
 
             case .spoofSuspected:
+                // Proven depth means there is a head in front of the camera, so
+                // "it never moved like a living one" is simply wrong — a still
+                // person, not a photograph.
+                if report.depthConfirmed {
+                    spoofSince = nil
+                    lastFaceSeen = Date()
+                    state = .ownerPresent
+                    break
+                }
                 let since = spoofSince ?? Date()
                 spoofSince = since
                 state = .verifying
@@ -321,6 +342,7 @@ final class SentryController: ObservableObject {
             forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in
                     guard let self, self.isArmed, self.policy.rearmAfterUnlock else { return }
+                    self.unlockedByOwnerAt = Date()
                     self.lastFaceSeen = Date()
                     self.state = .searching(since: Date())
                     EventLog.shared.record("rearm", "Screen unlocked by the owner.")
