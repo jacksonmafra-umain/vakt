@@ -2,6 +2,28 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.2 — 2026-08-27
+
+Fixes the worst failure this app had: locking the screen of the person it had just
+recognised.
+
+### Fixed
+
+- **False `spoofSuspected` locks on a still, reading owner.** Observed twice in 18
+  seconds on a real session, with the identity match at 0.885 and 0.904 and the
+  liveness score at 0.247 and 0.222 against a 0.25 floor. Without a detected
+  blink the score cannot exceed `0.55 × motion + 0.10 × jitter`, so someone
+  reading quietly lands exactly in spoof range. Three independent changes, each
+  enough on its own to have prevented it:
+  - A spoof verdict is vetoed when head depth is confirmed. Parallax proves there
+    is a volume in front of the camera, so "it never moved like a living one" is
+    just wrong.
+  - An authenticated unlock now suppresses all three spoof-shaped locks — still
+    face, flat geometry, held device — for `Policy.trustAfterUnlock` (90s,
+    adjustable in Settings). Touch ID is a far stronger presence signal than
+    anything the camera infers. Absence and strangers are unaffected.
+  - The sample window for a spoof verdict must now span 10 seconds, not 4.
+
 ## 0.2.1 — 2026-08-27
 
 Getting VAKT installed and actually running without having to remember it.

@@ -243,6 +243,7 @@ liveness and match numbers in the menu, then edit:
 | `IdentityEngine.rejectThreshold` | 0.45 | cosine | lower = fewer stranger false alarms |
 | `IdentityEngine.minCaptureQuality` | 0.35 | Vision quality | raise if blurry frames cause false locks |
 | `Policy.spoofGrace` | 8s | | raise if you read very still and get locked out |
+| `Policy.trustAfterUnlock` | 90s | how long a Touch ID unlock outranks the camera | lower only if you want the camera to override an authenticated unlock sooner |
 | `LivenessEngine.Tuning.planarityFloor` | 0.04 | per-radian depth residual | raise to catch screens more aggressively, at the risk of calling a still head flat |
 | `SceneMotionEngine.Tuning.couplingLimit` | 0.75 | fraction of agreeing samples | lower if a held phone survives; raise if a wobbly desk triggers it |
 
