@@ -69,9 +69,71 @@ struct Policy: Codable, Equatable {
     /// path needs no authentication. Disarming still does.
     var armAtLaunch = false
 
+    /// Lock when the face's geometry looks flat.
+    ///
+    /// Off by default, and that is a judgement about evidence rather than about
+    /// the idea. The homography check is sound on synthetic data — a plane scores
+    /// zero at every angle — but on real Vision landmarks it locked the owner's
+    /// screen once already, and an unvalidated heuristic that locks you out is
+    /// worse than one that misses an attack. It keeps measuring and logging, so
+    /// there is real data to calibrate against; turn it on once the `Depth`
+    /// reading in the menu is comfortably above the floor while you work.
+    var lockOnPlanarReplay = false
+
+    /// Ask GitHub once a day whether there is a newer release. The only network
+    /// traffic VAKT ever makes; nothing about what the camera sees is sent.
+    var checkForUpdates = true
+
+    /// Install a downloaded update without asking.
+    ///
+    /// Off by default on purpose: this build is signed ad-hoc, so a downloaded
+    /// bundle cannot be tied cryptographically to the same author as the running
+    /// one. Replacing the binary that guards your Mac deserves one deliberate
+    /// click; with this on, the download installs itself and VAKT relaunches.
+    var installUpdatesAutomatically = false
+
     /// Duty cycle while nothing is in frame.
     var idleBurstOn: Double = 2.5
     var idleBurstEvery: Double = 9
+}
+
+extension Policy {
+    /// Decode field by field, keeping the default for anything absent.
+    ///
+    /// Swift's synthesised decoder throws on a missing key even when the property
+    /// has a default value, so every field added to this struct made a stored
+    /// policy undecodable — and `PolicyStore.load()` then silently handed back a
+    /// fresh `Policy()`. Users lost their settings on every upgrade that touched
+    /// this file, with no error anywhere. Verified: a policy saved with
+    /// `absenceGrace = 35` came back as 25.
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        var policy = Policy()
+
+        func take<T: Decodable>(_ key: CodingKeys, _ current: T) -> T {
+            (try? box.decodeIfPresent(T.self, forKey: key)) .flatMap { $0 } ?? current
+        }
+
+        policy.absenceGrace = take(.absenceGrace, policy.absenceGrace)
+        policy.strangerGrace = take(.strangerGrace, policy.strangerGrace)
+        policy.spoofGrace = take(.spoofGrace, policy.spoofGrace)
+        policy.lockOnObstruction = take(.lockOnObstruction, policy.lockOnObstruction)
+        policy.obstructionLuma = take(.obstructionLuma, policy.obstructionLuma)
+        policy.obstructionGrace = take(.obstructionGrace, policy.obstructionGrace)
+        policy.lockOnSecondFace = take(.lockOnSecondFace, policy.lockOnSecondFace)
+        policy.holdSystemAwake = take(.holdSystemAwake, policy.holdSystemAwake)
+        policy.rearmAfterUnlock = take(.rearmAfterUnlock, policy.rearmAfterUnlock)
+        policy.armAtLaunch = take(.armAtLaunch, policy.armAtLaunch)
+        policy.trustAfterUnlock = take(.trustAfterUnlock, policy.trustAfterUnlock)
+        policy.lockOnPlanarReplay = take(.lockOnPlanarReplay, policy.lockOnPlanarReplay)
+        policy.checkForUpdates = take(.checkForUpdates, policy.checkForUpdates)
+        policy.installUpdatesAutomatically = take(.installUpdatesAutomatically,
+                                                 policy.installUpdatesAutomatically)
+        policy.idleBurstOn = take(.idleBurstOn, policy.idleBurstOn)
+        policy.idleBurstEvery = take(.idleBurstEvery, policy.idleBurstEvery)
+
+        self = policy
+    }
 }
 
 struct PolicyStore {
