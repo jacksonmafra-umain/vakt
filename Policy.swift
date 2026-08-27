@@ -53,6 +53,13 @@ struct Policy: Codable, Equatable {
     /// Re-arm automatically after you unlock the Mac yourself.
     var rearmAfterUnlock = true
 
+    /// Start watching as soon as VAKT launches, without asking.
+    ///
+    /// Arming is the only gated action that does not weaken anything — it turns
+    /// protection *on*, using a template only you enrolled — so the automatic
+    /// path needs no authentication. Disarming still does.
+    var armAtLaunch = false
+
     /// Duty cycle while nothing is in frame.
     var idleBurstOn: Double = 2.5
     var idleBurstEvery: Double = 9

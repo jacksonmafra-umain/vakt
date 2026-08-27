@@ -76,6 +76,13 @@ final class SentryController: ObservableObject {
             }
         }
         observeScreenLock()
+
+        // Starting at login is only half of "do not make me remember": the app
+        // would come up disarmed and wait for a decision nobody makes.
+        if isEnrolled, policy.armAtLaunch, case .success = capture.selectDevice() {
+            EventLog.shared.record("arm.atLaunch", "Armed automatically at launch.")
+            arm()
+        }
     }
 
     // MARK: - Arming

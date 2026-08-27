@@ -20,6 +20,7 @@ struct SettingsView: View {
                 Toggle("Lock if a second face appears", isOn: $draft.lockOnSecondFace)
                 Toggle("Keep the Mac awake while armed", isOn: $draft.holdSystemAwake)
                 Toggle("Re-arm after I unlock the Mac", isOn: $draft.rearmAfterUnlock)
+                Toggle("Start watching as soon as VAKT launches", isOn: $draft.armAtLaunch)
             }
             Section("Camera duty cycle") {
                 Stepper("Sample \(draft.idleBurstOn, specifier: "%.1f")s",
