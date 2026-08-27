@@ -137,10 +137,16 @@ if [ "$INSTALL_AGENT" = yes ]; then
     run launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$AGENT_PLIST"
 fi
 
-# 6. Launch.
+# 6. Launch — unless something already did. `launchctl bootstrap` starts the app
+#    itself, so opening it again here produced a second instance: two eye icons in
+#    the menu bar, two watchers, the camera in use twice.
 if [ "$OPEN_AFTER" = yes ]; then
-    say "Opening VAKT"
-    run open "$TARGET"
+    if [ "$DRY_RUN" = no ] && pgrep -qf "$APP_NAME/Contents/MacOS/VAKT"; then
+        say "VAKT is already running (started by the LaunchAgent); not opening a second copy"
+    else
+        say "Opening VAKT"
+        run open "$TARGET"
+    fi
 fi
 
 cat <<'DONE'

@@ -2,6 +2,15 @@
 
 All notable changes to VAKT. Newest first.
 
+## 0.2.4 — 2026-08-27
+
+### Fixed
+
+- `install.sh --launch-agent` started VAKT twice. `launchctl bootstrap` launches
+  the app itself, and the script then ran `open` as well: two eye icons in the menu
+  bar, two watchers, the camera claimed twice. It now skips the launch when the app
+  is already running.
+
 ## 0.2.3 — 2026-08-27
 
 ### Fixed
