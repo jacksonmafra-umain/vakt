@@ -14,6 +14,8 @@ struct SettingsView: View {
                         value: $draft.spoofGrace, in: 3...30, step: 1)
                 Stepper("Lock \(Int(draft.strangerGrace))s after a stranger appears",
                         value: $draft.strangerGrace, in: 0...15, step: 1)
+                Stepper("Trust me for \(Int(draft.trustAfterUnlock))s after I unlock the Mac",
+                        value: $draft.trustAfterUnlock, in: 0...300, step: 15)
             }
             Section("Rules") {
                 Toggle("Lock if the camera is covered", isOn: $draft.lockOnObstruction)
