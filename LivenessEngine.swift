@@ -12,6 +12,13 @@ struct LivenessReport {
     /// the detector's own noise floor. This is the signal a flat photo cannot fake.
     var nonRigidEnergy: Double = 0
     var blinkObserved: Bool = false
+    /// Out-of-plane reprojection error per radian of head rotation, normalised by
+    /// interocular distance. A head has depth, so rotating it breaks any single
+    /// homography; a panel does not, whatever the content on it is doing.
+    var parallaxPerRadian: Double = 0
+    var parallaxSamples: Int = 0
+    /// The face deforms and blinks, but its geometry is provably flat.
+    var planarReplaySuspected: Bool = false
     /// Head micro-motion. Near zero means a *mounted* photo (or a statue).
     var poseJitter: Double = 0
     var samples: Int = 0
@@ -60,6 +67,17 @@ final class LivenessEngine {
         /// score <= spoofAt -> spoof (only once the window is full)
         var spoofAt: Double = 0.25
 
+        /// A frame pair must rotate at least this much (radians) before its
+        /// homography residual says anything: with no rotation there is no
+        /// parallax to miss, and a head looks exactly as flat as a screen.
+        var parallaxMinRotation: Double = 0.04      // ≈ 2.3°
+        var parallaxMinSamples: Int = 12
+        /// Below this, rotation produced no depth. Real faces measured well above.
+        var planarityFloor: Double = 0.04
+        /// Rotation pairs are rare compared to frames, so they get their own,
+        /// much longer window.
+        var parallaxWindowSeconds: Double = 60
+
         var weightMotion: Double = 0.55
         var weightBlink: Double = 0.35
         var weightJitter: Double = 0.10
@@ -72,11 +90,12 @@ final class LivenessEngine {
     private var openness: [(t: CFTimeInterval, v: Double)] = []
     private var yaws: [(t: CFTimeInterval, v: Double)] = []
     private var pitches: [(t: CFTimeInterval, v: Double)] = []
+    private var parallax: [(t: CFTimeInterval, v: Double)] = []
 
     func reset() {
         previous = nil
         energies.removeAll(); openness.removeAll()
-        yaws.removeAll(); pitches.removeAll()
+        yaws.removeAll(); pitches.removeAll(); parallax.removeAll()
     }
 
     @discardableResult
@@ -86,6 +105,9 @@ final class LivenessEngine {
         if let prev = previous, sample.time - prev.time < 0.5 {
             if let e = nonRigidEnergy(prev: prev, curr: sample) {
                 energies.append((sample.time, e))
+            }
+            if let p = parallaxRatio(prev: prev, curr: sample) {
+                parallax.append((sample.time, p))
             }
         } else if previous != nil {
             // Gap in the stream (duty-cycled camera). Drop the pairing, keep history.
@@ -132,6 +154,23 @@ final class LivenessEngine {
         // so the median would wash it out.
         let deformation = Geometry.percentile(signal, 0.75) - Geometry.median(noise)
         return max(0, deformation / iod)
+    }
+
+    /// Reprojection error the best-fit homography cannot absorb, per radian of
+    /// rotation, normalised by interocular distance. Returns nil when the pair
+    /// did not rotate enough to carry information.
+    private func parallaxRatio(prev: FaceSample, curr: FaceSample) -> Double? {
+        let rotation = abs(curr.yaw - prev.yaw) + abs(curr.pitch - prev.pitch)
+        guard rotation >= tuning.parallaxMinRotation else { return nil }
+
+        let a = prev.stable + prev.expressive
+        let b = curr.stable + curr.expressive
+        guard a.count == b.count, a.count >= 8,
+              let h = Homography.fit(from: a, to: b) else { return nil }
+
+        let iod = Double(curr.interocular)
+        guard iod > 0 else { return nil }
+        return (Homography.residual(h, from: a, to: b) / iod) / rotation
     }
 
     /// Eye aperture as height/width in the eye's own frame, averaged over both
@@ -183,6 +222,12 @@ final class LivenessEngine {
             if open > 0 { r.blinkObserved = (open - shut) / open >= tuning.blinkDropRatio }
         }
 
+        r.parallaxSamples = parallax.count
+        if r.parallaxSamples >= tuning.parallaxMinSamples {
+            r.parallaxPerRadian = Geometry.median(parallax.map(\.v))
+            r.planarReplaySuspected = r.parallaxPerRadian <= tuning.planarityFloor
+        }
+
         r.poseJitter = max(Geometry.stdDev(yaws.map(\.v)), Geometry.stdDev(pitches.map(\.v)))
         let jitter = min(1.0, r.poseJitter / tuning.jitterFloor)
 
@@ -205,6 +250,7 @@ final class LivenessEngine {
     }
 
     private func trim(before cutoff: CFTimeInterval) {
+        parallax.removeAll { $0.t < cutoff - (tuning.parallaxWindowSeconds - tuning.windowSeconds) }
         energies.removeAll { $0.t < cutoff }
         openness.removeAll { $0.t < cutoff }
         yaws.removeAll { $0.t < cutoff }

@@ -18,6 +18,8 @@ enum LockReason: String, Equatable, Codable {
     case ownerAbsent      = "You left and did not come back."
     case strangerPresent  = "A face that is not yours was in front of the camera."
     case spoofSuspected   = "A face matched, but it never moved like a living one."
+    case screenReplay     = "A face matched and moved, but its geometry is flat — a screen, not a head."
+    case heldDevice       = "The face and everything behind it moved together — something is being held up to the camera."
     case cameraObstructed = "The camera was covered while VAKT was armed."
     case secondFace       = "A second face appeared behind you."
     case manual           = "Locked from the menu."
