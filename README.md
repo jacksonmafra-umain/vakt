@@ -12,6 +12,19 @@ your login password.
 
 ---
 
+## Screens
+
+| Menu bar | Enrolment | About |
+|---|---|---|
+| ![The VAKT menu](docs/screenshots/menu.png) | ![The enrolment window](docs/screenshots/enrolment.png) | ![The about window](docs/screenshots/about.png) |
+
+The enrolment window shows the live camera, how many of the 18 views are in, and
+why a frame was rejected — a capture that fails silently is indistinguishable
+from a broken camera. While armed, the menu shows the liveness and match scores
+that a lock decision would be made on.
+
+---
+
 ## Why the motion requirement is the whole point
 
 Face matching alone is trivially defeated: someone holds up your LinkedIn photo
