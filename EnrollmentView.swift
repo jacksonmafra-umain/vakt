@@ -127,6 +127,11 @@ struct EnrollmentView: View {
                     let ok = await sentry.beginEnrollment()
                     failed = !ok
                     starting = false
+                    // The Touch ID sheet hands focus back to whatever was
+                    // frontmost before it. Take it back, or the user ends up
+                    // enrolling into a window they cannot see.
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.keyWindow?.orderFrontRegardless()
                 }
             }
             .keyboardShortcut(.defaultAction)
@@ -179,16 +184,24 @@ private struct CameraPreview: NSViewRepresentable {
     }
 }
 
-/// SwiftUI restores a window's last frame, and for a Dock-less app that frame can
-/// be off-screen — the window then exists, reports a size, and is invisible.
-/// Centre it on the active screen every time it opens.
-struct WindowCentring: NSViewRepresentable {
+/// An accessory app (`LSUIElement`) has no Dock icon, so nothing brings its
+/// windows forward for it: SwiftUI restores the last frame — which can be
+/// off-screen or on another Space — and whatever the user was using stays in
+/// front. Claim the front explicitly, on the Space that is actually visible.
+///
+/// `openWindow` returns before the window exists, so activating from the call
+/// site is too early. This runs once the view is in a window, which is not.
+struct WindowFronting: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             window.setFrameAutosaveName("")
+            window.collectionBehavior.insert(.moveToActiveSpace)
             window.center()
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
         }
         return view
     }
@@ -198,6 +211,6 @@ struct WindowCentring: NSViewRepresentable {
 
 extension View {
     func centredOnScreen() -> some View {
-        background(WindowCentring().frame(width: 0, height: 0))
+        background(WindowFronting().frame(width: 0, height: 0))
     }
 }
