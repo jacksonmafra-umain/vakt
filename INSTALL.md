@@ -32,16 +32,43 @@ enrolled face template is a set of float vectors in the Keychain marked
 
 ## Option A — run the release build
 
-1. Download `VAKT.zip` from the
-   [latest release](https://github.com/jacksonmafra-umain/vakt/releases/latest).
-2. Unzip it and move `VAKT.app` to `/Applications`.
-3. Remove the download quarantine flag:
+1. Download `VAKT-<version>.zip` from the
+   [latest release](https://github.com/jacksonmafra-umain/vakt/releases/latest)
+   and unzip it.
+2. Run the installer that comes with it:
 
    ```sh
-   xattr -dr com.apple.quarantine /Applications/VAKT.app
+   cd ~/Downloads/VAKT-0.2.0
+   ./install.sh
    ```
 
-4. Open it: `open /Applications/VAKT.app`.
+   It stops any running copy, copies `VAKT.app` to `/Applications`, clears the
+   download quarantine flag, verifies the bundle and opens the app. Every command
+   it is about to run is printed first, and `--dry-run` prints them without
+   changing anything. Read it before running it — a script that tells Gatekeeper
+   to trust an un-notarised app deserves thirty seconds of your attention.
+
+   Useful flags:
+
+   ```sh
+   ./install.sh --dry-run              # show what would happen, change nothing
+   ./install.sh --launch-agent         # also relaunch VAKT if it is force-quit
+   ./install.sh --dest ~/Applications  # install per-user instead
+   ./install.sh --no-open              # install without launching
+   ```
+
+   `/Applications` is writable by admin users, so no password is normally needed.
+   If yours is locked down the script says so and uses `sudo` for the copy only.
+
+### Or do it by hand
+
+The script does exactly this:
+
+```sh
+mv ~/Downloads/VAKT-0.2.0/VAKT.app /Applications/
+xattr -dr com.apple.quarantine /Applications/VAKT.app
+open /Applications/VAKT.app
+```
 
 An eye icon appears in the menu bar. There is no Dock icon and no main window —
 VAKT is a menu-bar app. On first launch it opens the enrolment window because
@@ -54,8 +81,12 @@ Symptoms and fixes, in the order to try them:
 **"VAKT.app is damaged and can't be opened" or "cannot be opened because the
 developer cannot be verified"**
 
-The quarantine flag is still set, or the app was moved after you cleared it. Run
-the `xattr` command above again, then try opening it.
+The quarantine flag is still set, or the app was moved after you cleared it.
+Re-run `./install.sh`, or clear it directly:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/VAKT.app
+```
 
 **"Apple could not verify VAKT is free of malware"** (macOS 15+ wording)
 

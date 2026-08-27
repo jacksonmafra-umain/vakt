@@ -37,6 +37,10 @@ simply did not have.
 - `Depth` and `Scene coupling` readings in the menu, alongside liveness and match.
 - XcodeGen project generation (`project.yml`), so the Xcode project is disposable
   rather than a checked-in artefact.
+- `install.sh`, shipped inside the release zip: stops any running copy, installs
+  to `/Applications`, clears the download quarantine flag, verifies the bundle and
+  launches it. Prints every command before running it, and `--dry-run` changes
+  nothing. Optional `--launch-agent`, `--dest` and `--no-open`.
 
 ### Changed
 

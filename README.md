@@ -158,8 +158,10 @@ Resources/
 
 ## Build
 
-Installing a release build instead, or hitting a Gatekeeper block? See
-[INSTALL.md](INSTALL.md).
+Installing a release build instead? The release zip ships an `install.sh` that
+copies the app to `/Applications` and clears the download quarantine flag, with
+`--dry-run` to see the commands first. Gatekeeper trouble and the manual steps
+are in [INSTALL.md](INSTALL.md).
 
 The Xcode project is generated from `project.yml`, so it is not checked in.
 
