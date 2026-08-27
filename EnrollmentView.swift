@@ -192,26 +192,101 @@ private struct CameraPreview: NSViewRepresentable {
 ///
 /// `openWindow` returns before the window exists, so activating from the call
 /// site is too early. This runs once the view is in a window, which is not.
-struct WindowFronting: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
+///
+/// Fronting has to happen on *every* appearance, not just the first: SwiftUI
+/// reuses a window (the Settings scene in particular), so a view that only
+/// fronted from `makeNSView` came forward once and then never again.
+@MainActor
+final class WindowHandle: ObservableObject {
+    weak var window: NSWindow?
+
+    private var keyObserver: NSObjectProtocol?
+
+    func front(centre: Bool) {
+        guard let window else { return }
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        if centre {
             window.setFrameAutosaveName("")
-            window.collectionBehavior.insert(.moveToActiveSpace)
             window.center()
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
         }
-        return view
+
+        // Activation is a request the system is free to refuse. Since macOS 14 it
+        // usually does: `activate(ignoringOtherApps:)` is deprecated and focus is
+        // not handed over just because an app asked, so a menu-bar app's window
+        // opened behind whatever the user was reading. Measured on macOS 26: the
+        // window appeared on screen and the frontmost app never changed.
+        //
+        // So do not rely on it. Raise the window above other apps outright, and
+        // drop it back to normal level as soon as it really is focused, so it does
+        // not hover over everything for the rest of its life.
+        NSApp.activate()
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+
+        if keyObserver == nil {
+            keyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main) { note in
+                    (note.object as? NSWindow)?.level = .normal
+                }
+        }
+    }
+
+    deinit {
+        if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
+    }
+}
+
+private struct WindowBinder: NSViewRepresentable {
+    let handle: WindowHandle
+    let centre: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        BinderView(handle: handle, centre: centre)
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {}
+
+    /// `viewDidMoveToWindow` is the moment the window actually exists.
+    private final class BinderView: NSView {
+        private let handle: WindowHandle
+        private let centre: Bool
+
+        init(handle: WindowHandle, centre: Bool) {
+            self.handle = handle
+            self.centre = centre
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError("not used") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil else { return }
+            handle.window = window
+            DispatchQueue.main.async { [handle, centre] in handle.front(centre: centre) }
+        }
+    }
 }
 
 extension View {
-    func centredOnScreen() -> some View {
-        background(WindowFronting().frame(width: 0, height: 0))
+    /// Centre on the active screen and take the front, on every appearance.
+    func centredOnScreen() -> some View { modifier(Fronting(centre: true)) }
+
+    /// Take the front without moving the window — for a window the user may have
+    /// placed deliberately, like Settings.
+    func frontedOnScreen() -> some View { modifier(Fronting(centre: false)) }
+}
+
+private struct Fronting: ViewModifier {
+    let centre: Bool
+    @StateObject private var handle = WindowHandle()
+
+    func body(content: Content) -> some View {
+        content
+            .background(WindowBinder(handle: handle, centre: centre).frame(width: 0, height: 0))
+            .onAppear { handle.front(centre: centre) }
     }
 }

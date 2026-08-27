@@ -60,6 +60,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .frontedOnScreen()
         .frame(width: 420)
         .padding()
     }
