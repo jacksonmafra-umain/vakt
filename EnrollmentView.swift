@@ -34,6 +34,7 @@ struct EnrollmentView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(width: 420)
             }
 
